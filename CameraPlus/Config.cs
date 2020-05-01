@@ -53,7 +53,7 @@ namespace CameraPlus
         public bool fitToCanvas = false;
         public bool transparentWalls = false;
         public bool forceFirstPersonUpRight = false;
-        public bool avatar = true;
+        public int avatar = 1;
         public string debri = "link";
         public string movementScriptPath = String.Empty;
         //public int maxFps = 90;

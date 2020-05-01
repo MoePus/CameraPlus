@@ -11,6 +11,7 @@ using UnityEngine.XR;
 using UnityEngine.SceneManagement;
 using VRUIControls;
 using Screen = UnityEngine.Screen;
+using UnityEngine.Experimental.Rendering;
 
 namespace CameraPlus
 {
@@ -150,6 +151,7 @@ namespace CameraPlus
                 Destroy(_liv);
 
             _screenCamera = new GameObject("Screen Camera").AddComponent<ScreenCameraBehaviour>();
+            _screenCamera.isMainCamera = _isMainCamera;
 
             if (_previewMaterial == null)
                 _previewMaterial = new Material(Shader.Find("Hidden/BlitCopyWithDepth"));
@@ -304,6 +306,7 @@ namespace CameraPlus
 
                 _camRenderTexture.useDynamicScale = false;
                 _camRenderTexture.antiAliasing = Config.antiAliasing;
+                _camRenderTexture.format = RenderTextureFormat.ARGBFloat;
                 _camRenderTexture.Create();
 
                 _cam.targetTexture = _camRenderTexture;
@@ -508,8 +511,13 @@ namespace CameraPlus
                 _cam.cullingMask &= ~(1 << TransparentWallsPatch.WallLayerMask);
             else
                 _cam.cullingMask |= (1 << TransparentWallsPatch.WallLayerMask);
-            if (Config.avatar)
+            if (Config.avatar > 0)
             {
+                if (Config.avatar > 1)
+                {
+                    _cam.cullingMask = 0;
+                }
+
                 if (Config.thirdPerson || Config.use360Camera)
                 {
                     _cam.cullingMask |= 1 << OnlyInThirdPerson;

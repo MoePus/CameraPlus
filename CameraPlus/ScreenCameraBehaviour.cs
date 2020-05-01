@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using System;
+using UnityEngine;
 
 namespace CameraPlus
 {
@@ -10,6 +11,9 @@ namespace CameraPlus
     {
         private Camera _cam;
         private RenderTexture _renderTexture;
+        static public Shader shader;
+        public Material mat;
+        public bool isMainCamera;
 
         public void SetRenderTexture(RenderTexture renderTexture)
         {
@@ -28,15 +32,49 @@ namespace CameraPlus
             DontDestroyOnLoad(gameObject);
 
             _cam = gameObject.AddComponent<Camera>();
-            _cam.clearFlags = CameraClearFlags.Nothing;
+            _cam.clearFlags = CameraClearFlags.SolidColor;
+            _cam.backgroundColor = new Color(0.0f, 0.0f, 0.0f, 0.0f);
             _cam.cullingMask = 0;
             _cam.stereoTargetEye = StereoTargetEyeMask.None;
+
+            if (!shader)
+            {
+                try {
+                    shader = AssetBundle.LoadFromFile("UserData/CameraPlus/shader.assetbundle").LoadAsset("assets/alphablit.shader") as Shader;
+                }
+                catch (Exception e)
+                {
+                    Logger.Log(e.ToString());
+                }            
+            }
+
+            try
+            {
+                mat = new Material(shader);
+                Logger.Log($"Load AlphaBlit shader successed.");
+            }
+            catch (Exception e)
+            {
+                Logger.Log(e.ToString());
+                Logger.Log($"Cannot load AlphaBlit shader.");
+            }
+         
         }
         
         private void OnRenderImage(RenderTexture src, RenderTexture dest)
         {
             if (_renderTexture == null) return;
-            Graphics.Blit(_renderTexture, dest);
+
+            if (isMainCamera)
+            {
+                Graphics.Blit(_renderTexture, dest);
+            }
+            else
+            {
+                mat.SetTexture("_MainTex", _renderTexture);
+                mat.SetTexture("_SecondTex", src);
+                Graphics.Blit(_renderTexture, dest, mat);
+            }
         }
     }
 }
