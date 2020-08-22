@@ -76,9 +76,11 @@ namespace CameraPlus
         protected bool easeTransition = true;
         protected float movePerc;
         protected int eventID;
-        protected DateTime movementStartTime, movementEndTime, movementDelayEndTime;
+        protected float movementStartTime, movementEndTime, movementNextStartTime;
+        protected DateTime movementStartDateTime, movementEndDateTime, movementDelayEndDateTime;
         protected bool _paused = false;
         protected DateTime _pauseTime;
+        private AudioTimeSyncController _audioTimeSyncController;
 
         public class Movements
         {
@@ -150,13 +152,27 @@ namespace CameraPlus
         {
             if (!dataLoaded || _paused) return;
 
-            if (movePerc == 1 && movementDelayEndTime <= DateTime.Now)
-                UpdatePosAndRot();
-                
-            long differenceTicks = (movementEndTime - movementStartTime).Ticks;
-            long currentTicks = (DateTime.Now - movementStartTime).Ticks;
-            movePerc = Mathf.Clamp((float)currentTicks / (float)differenceTicks, 0, 1);
+            if (_cameraPlus.Config.movementAudioSync)
+            {
+                if (_audioTimeSyncController == null) return;
 
+                if (movementNextStartTime <= _audioTimeSyncController.songTime)
+                    UpdatePosAndRot();
+
+                float difference = movementEndTime - movementStartTime;
+                float current = _audioTimeSyncController.songTime - movementStartTime;
+                if (difference != 0)
+                    movePerc = Mathf.Clamp(current / difference, 0, 1);
+            }
+            else
+            {
+                if (movePerc == 1 && movementDelayEndDateTime <= DateTime.Now)
+                    UpdatePosAndRot();
+
+                long differenceTicks = (movementEndDateTime - movementStartDateTime).Ticks;
+                long currentTicks = (DateTime.Now - movementStartDateTime).Ticks;
+                movePerc = Mathf.Clamp((float)currentTicks / (float)differenceTicks, 0, 1);
+            }
             _cameraPlus.ThirdPersonPos = LerpVector3(StartPos, EndPos, Ease(movePerc));
             _cameraPlus.ThirdPersonRot = LerpVector3(StartRot, EndRot, Ease(movePerc));
         }
@@ -168,6 +184,10 @@ namespace CameraPlus
 
         public virtual bool Init(CameraPlusBehaviour cameraPlus)
         {
+            if (_audioTimeSyncController == null)
+            {
+                _audioTimeSyncController = Resources.FindObjectsOfTypeAll<AudioTimeSyncController>().FirstOrDefault();
+            }
             _cameraPlus = cameraPlus;
             Plugin.Instance.ActiveSceneChanged += OnActiveSceneChanged;
             return LoadCameraData(cameraPlus.Config.movementScriptPath);
@@ -191,15 +211,22 @@ namespace CameraPlus
         {
             if (!_paused) return;
 
-            TimeSpan diff = DateTime.Now - _pauseTime;
-            movementStartTime += diff;
-            movementEndTime += diff;
-            movementDelayEndTime += diff;
             _paused = false;
         }
 
-        protected bool LoadCameraData(string path)
+        protected bool LoadCameraData(string pathFile)
         {
+            string path="";
+            if (File.Exists(pathFile))
+                path = pathFile;
+            else if (File.Exists(Path.Combine(UnityGame.UserDataPath, Plugin.Name, "Scripts", pathFile)))
+            {
+                path = Path.Combine(UnityGame.UserDataPath, Plugin.Name, "Scripts", pathFile);
+            }
+            else if (File.Exists(Path.Combine(UnityGame.UserDataPath, Plugin.Name, "Scripts", Path.GetFileName(pathFile))))
+            {
+                path = Path.Combine(UnityGame.UserDataPath, Plugin.Name, "Scripts", Path.GetFileName(pathFile));
+            }
             if (File.Exists(path))
             {
                 string jsonText = File.ReadAllText(path);
@@ -235,7 +262,6 @@ namespace CameraPlus
 
         protected void UpdatePosAndRot()
         {
-            eventID++;
             if (eventID >= data.Movements.Count)
                 eventID = 0;
 
@@ -249,9 +275,20 @@ namespace CameraPlus
 
             FindShortestDelta(ref StartRot, ref EndRot);
 
-            movementStartTime = DateTime.Now;
-            movementEndTime = movementStartTime.AddSeconds(data.Movements[eventID].Duration);
-            movementDelayEndTime = movementStartTime.AddSeconds(data.Movements[eventID].Duration + data.Movements[eventID].Delay);
+            if (_cameraPlus.Config.movementAudioSync)
+            {
+                movementStartTime = movementNextStartTime;
+                movementEndTime = movementNextStartTime + data.Movements[eventID].Duration;
+                movementNextStartTime = movementEndTime + data.Movements[eventID].Delay;
+            }
+            else
+            {
+                movementStartDateTime = DateTime.Now;
+                movementEndDateTime = movementStartDateTime.AddSeconds(data.Movements[eventID].Duration);
+                movementDelayEndDateTime = movementStartDateTime.AddSeconds(data.Movements[eventID].Duration + data.Movements[eventID].Delay);
+            }
+
+            eventID++;
         }
 
         protected float Ease(float p)

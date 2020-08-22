@@ -1,6 +1,8 @@
 ﻿using IPA.Utilities;
+using System;
 using System.IO;
 using System.Linq;
+using UnityEngine;
 
 namespace CameraPlus
 {
@@ -143,6 +145,20 @@ namespace CameraPlus
                     DirectoryCopy(subdir.FullName, temppath, copySubDirs);
                 }
             }
+        }
+    }
+    class ProfileChanger : MonoBehaviour
+    {
+        public void ProfileChange(String ProifileName)
+        {
+            var cs = Resources.FindObjectsOfTypeAll<CameraPlusBehaviour>();
+            foreach (var c in cs)
+                CameraUtilities.RemoveCamera(c);
+            foreach (var csi in Plugin.Instance.Cameras.Values)
+                Destroy(csi.Instance.gameObject);
+            Plugin.Instance.Cameras.Clear();
+            CameraProfiles.SetProfile(ProifileName);
+            CameraUtilities.ReloadCameras();
         }
     }
 }

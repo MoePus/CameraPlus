@@ -4,12 +4,14 @@ using System.Collections;
 using System.Collections.Concurrent;
 using IPA;
 using IPA.Loader;
+using IPA.Utilities;
 using IPALogger = IPA.Logging.Logger;
 using LogLevel = IPA.Logging.Logger.Level;
 using HarmonyLib;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using Object = UnityEngine.Object;
+using System.IO;
 
 namespace CameraPlus
 {
@@ -25,6 +27,13 @@ namespace CameraPlus
         public static Plugin Instance { get; private set; }
         public static string Name => "CameraPlus";
         public static string MainCamera => "cameraplus";
+
+        public RootConfig _rootConfig;
+        private ProfileChanger _profileChanger;
+
+        // Delete when CustomAvatar returns
+        private int CustomAvatarThirdPerson = 21; //CustomAvatarS have the first person and third person processes reversed.
+        private int CustomAvatarAlwaysVisible = 23;
 
         [Init]
         public void Init(IPALogger logger)
@@ -54,6 +63,11 @@ namespace CameraPlus
             // Add our default cameraplus camera
             CameraUtilities.AddNewCamera(Plugin.MainCamera);
             CameraProfiles.CreateMainDirectory();
+
+            string path = Path.Combine(UnityGame.UserDataPath, Plugin.Name + ".ini");
+            _rootConfig = new RootConfig(path);
+            _profileChanger = new ProfileChanger();
+
             Logger.Log($"{Plugin.Name} has started", LogLevel.Notice);
         }
 
@@ -66,13 +80,29 @@ namespace CameraPlus
         {
             yield return new WaitForSeconds(0.5f);
             // If any new cameras have been added to the config folder, render them
-           // if(to.name == )
+            // if(to.name == )
+
             CameraUtilities.ReloadCameras();
 
             if (ActiveSceneChanged != null)
             {
-                
-                CameraUtilities.SetAllCameraCulling();
+                if (_rootConfig.ProfileSceneChange)
+                {
+                    if (to.name == "GameCore" && _rootConfig.GameProfile != "") 
+                    {
+                        _profileChanger.ProfileChange(_rootConfig.GameProfile);
+                    }
+                    else if (to.name == "MenuCore" && _rootConfig.MenuProfile != "")
+                        _profileChanger.ProfileChange(_rootConfig.MenuProfile);
+                }
+
+                yield return new WaitForSeconds(1.0f);
+
+                // Delete when CustomAvatars returns layer
+                Camera.main.cullingMask |= (1 << CustomAvatarThirdPerson);
+                Camera.main.cullingMask |= (1 << CustomAvatarAlwaysVisible);
+
+
                 // Invoke each activeSceneChanged event
                 foreach (var func in ActiveSceneChanged?.GetInvocationList())
                 {
@@ -87,6 +117,8 @@ namespace CameraPlus
                     }
                 }
             }
+            if (to.name == "GameCore" || to.name == "MenuCore" || to.name== "MenuViewControllers" || to.name== "HealthWarning")
+                CameraUtilities.SetAllCameraCulling();
         }
 
         [OnExit]
