@@ -28,14 +28,15 @@ namespace CameraPlus
 
         protected readonly WaitUntil _waitForMainCamera = new WaitUntil(() => Camera.main);
         private readonly WaitForSecondsRealtime _waitForSecondsRealtime = new WaitForSecondsRealtime(1f);
-        protected const int OnlyInThirdPerson = 3;
         protected const int UILayer = 5;
-        protected const int OnlyInFirstPerson = 6; //Moved to an empty layer because layer 4 overlapped the floor
+        //protected const int OnlyInFirstPerson = 6; //Moved to an empty layer because layer 4 overlapped the floor
         protected const int NotesDebriLayer = 9;
-        protected const int AlwaysVisible = 10; // For BeatSaberCunstomAvatars above v5.0.0
-        protected const int CustomAvatarThirdPerson = 21;
-        protected const int CustomAvatarFirstPerson = 22;
-        protected const int CustomAvatarAlwaysVisible = 23;
+
+        //CustomAvatarConst For BeatSaberCunstomAvatars above v5.0.0
+        protected const int kAlwaysVisible = 10;
+        protected const int kOnlyInThirdPerson = 3;
+        protected const int kThirdPersonMask = 1 << kOnlyInThirdPerson;
+        protected const int kAlwaysVisibleMask = 1 << kAlwaysVisible;
         public bool ThirdPerson {
             get { return _thirdPerson; }
             set {
@@ -45,17 +46,11 @@ namespace CameraPlus
 
                 if (value)
                 {
-                    _cam.cullingMask &= ~(1 << OnlyInFirstPerson);
-                    _cam.cullingMask |= 1 << OnlyInThirdPerson;
-                    _cam.cullingMask &= ~(1 << CustomAvatarFirstPerson);
-                    _cam.cullingMask |= 1 << CustomAvatarThirdPerson;
+                    _cam.cullingMask |= kThirdPersonMask;
                 }
                 else
                 {
-                    _cam.cullingMask &= ~(1 << OnlyInThirdPerson);
-                    _cam.cullingMask |= 1 << OnlyInFirstPerson;
-                    _cam.cullingMask &= ~(1 << CustomAvatarThirdPerson);
-                    _cam.cullingMask |= 1 << CustomAvatarFirstPerson;
+                    _cam.cullingMask &= ~kThirdPersonMask;
                 }
             }
         }
@@ -533,33 +528,26 @@ namespace CameraPlus
                 if (Config.avatar > 1)
                 {
                     _cam.cullingMask = 0;
-                }
-
-                if (Config.thirdPerson || Config.use360Camera)
-                {
-                    _cam.cullingMask |= 1 << OnlyInThirdPerson;
-                    _cam.cullingMask &= ~(1 << OnlyInFirstPerson);
-                    _cam.cullingMask |= 1 << CustomAvatarThirdPerson;
-                    _cam.cullingMask &= ~(1 << CustomAvatarFirstPerson);
+                    _cam.cullingMask |= kThirdPersonMask;
+                    _cam.cullingMask |= kAlwaysVisibleMask;
                 }
                 else
                 {
-                    _cam.cullingMask |= 1 << OnlyInFirstPerson;
-                    _cam.cullingMask &= ~(1 << OnlyInThirdPerson);
-                    _cam.cullingMask |= 1 << CustomAvatarFirstPerson;
-                    _cam.cullingMask &= ~(1 << CustomAvatarThirdPerson);
+                    if (Config.thirdPerson || Config.use360Camera)
+                    {
+                        _cam.cullingMask |= kThirdPersonMask;
+                    }
+                    else
+                    {
+                        _cam.cullingMask &= ~kThirdPersonMask;
+                    }
+                    _cam.cullingMask |= kAlwaysVisibleMask;
                 }
-                _cam.cullingMask |= 1 << AlwaysVisible;
-                _cam.cullingMask |= 1 << CustomAvatarAlwaysVisible;
             }
             else
             {
-                _cam.cullingMask &= ~(1 << OnlyInThirdPerson);
-                _cam.cullingMask &= ~(1 << OnlyInFirstPerson);
-                _cam.cullingMask &= ~(1 << AlwaysVisible);
-                _cam.cullingMask &= ~(1 << CustomAvatarThirdPerson);
-                _cam.cullingMask &= ~(1 << CustomAvatarFirstPerson);
-                _cam.cullingMask &= ~(1 << CustomAvatarAlwaysVisible);
+                _cam.cullingMask &= ~kThirdPersonMask;
+                _cam.cullingMask &= ~kAlwaysVisibleMask;
             }
             if (Config.debri!="link")
             {
