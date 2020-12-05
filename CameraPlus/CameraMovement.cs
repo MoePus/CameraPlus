@@ -7,7 +7,9 @@ using IPA.Utilities;
 using LogLevel = IPA.Logging.Logger.Level;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using CameraPlus.SimpleJSON;
+using Newtonsoft.Json;
+using System.Runtime.InteropServices;
+
 
 namespace CameraPlus
 {
@@ -15,7 +17,7 @@ namespace CameraPlus
     {
         public override bool Init(CameraPlusBehaviour cameraPlus)
         {
-            if (Utils.IsModInstalled("SongLoaderPlugin"))
+            if (Utils.IsModInstalled("BS_Utils"))
             {
                 _cameraPlus = cameraPlus;
                 Plugin.Instance.ActiveSceneChanged += OnActiveSceneChanged;
@@ -73,24 +75,29 @@ namespace CameraPlus
         protected Vector3 EndPos = Vector3.zero;
         protected Vector3 StartRot = Vector3.zero;
         protected Vector3 EndRot = Vector3.zero;
+        protected float StartFOV = 0;
+        protected float EndFOV = 0;
         protected bool easeTransition = true;
         protected float movePerc;
         protected int eventID;
-        protected DateTime movementStartTime, movementEndTime, movementDelayEndTime;
+        protected float movementStartTime, movementEndTime, movementNextStartTime;
+        protected DateTime movementStartDateTime, movementEndDateTime, movementDelayEndDateTime;
         protected bool _paused = false;
         protected DateTime _pauseTime;
+        private AudioTimeSyncController _audioTimeSyncController;
 
         public class Movements
         {
             public Vector3 StartPos;
             public Vector3 StartRot;
+            public float StartFOV;
             public Vector3 EndPos;
             public Vector3 EndRot;
+            public float EndFOV;
             public float Duration;
             public float Delay;
             public bool EaseTransition = true;
         }
-
         public class CameraData
         {
             public bool ActiveInPauseMenu = true;
@@ -99,31 +106,45 @@ namespace CameraPlus
             public bool LoadFromJson(string jsonString)
             {
                 Movements.Clear();
-                JSONNode node = JSON.Parse(jsonString);
-
-                if (node != null && !node["Movements"].IsNull)
+                MovementScriptJson movementScriptJson=null;
+                try
                 {
-                    if (node["ActiveInPauseMenu"].IsBoolean)
-                        ActiveInPauseMenu = node["ActiveInPauseMenu"].AsBool;
+                    movementScriptJson = JsonConvert.DeserializeObject<MovementScriptJson>(jsonString);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Log($"JSON file syntax error. {ex.Message}", LogLevel.Error);
+                }
+                if (movementScriptJson != null && movementScriptJson.Jsonmovement !=null)
+                {
+                    if (movementScriptJson.ActiveInPauseMenu != null)
+                        ActiveInPauseMenu = System.Convert.ToBoolean(movementScriptJson.ActiveInPauseMenu);
 
-                    foreach (JSONObject movement in node["Movements"].AsArray)
+                    foreach (JSONMovement jsonmovement in movementScriptJson.Jsonmovement)
                     {
                         Movements newMovement = new Movements();
-                        var startPos = movement["StartPos"];
-                        var startRot = movement["StartRot"];
-                        newMovement.StartPos = new Vector3(startPos["x"].AsFloat, startPos["y"].AsFloat, startPos["z"].AsFloat);
-                        newMovement.StartRot = new Vector3(startRot["x"].AsFloat, startRot["y"].AsFloat, startRot["z"].AsFloat);
+                        StartPos startPos = jsonmovement.startPos;
+                        StartRot startRot = jsonmovement.startRot;
+                        if (startPos.x != null) newMovement.StartPos = new Vector3(float.Parse(startPos.x), float.Parse(startPos.y), float.Parse(startPos.z));
+                        if (startRot.x != null) newMovement.StartRot = new Vector3(float.Parse(startRot.x), float.Parse(startRot.y), float.Parse(startRot.z));
+                        if (startPos.FOV != null)
+                            newMovement.StartFOV = float.Parse(startPos.FOV);
+                        else
+                            newMovement.StartFOV = 0;
+                        EndPos endPos = jsonmovement.endPos;
+                        EndRot endRot = jsonmovement.endRot;
+                        if (endPos.x != null) newMovement.EndPos = new Vector3(float.Parse(endPos.x), float.Parse(endPos.y), float.Parse(endPos.z));
+                        if (endRot.x != null) newMovement.EndRot = new Vector3(float.Parse(endRot.x), float.Parse(endRot.y), float.Parse(endRot.z));
+                        if (endPos.FOV != null)
+                            newMovement.EndFOV = float.Parse(endPos.FOV);
+                        else
+                            newMovement.EndFOV = 0;
 
-                        var endPos = movement["EndPos"];
-                        var endRot = movement["EndRot"];
-                        newMovement.EndPos = new Vector3(endPos["x"].AsFloat, endPos["y"].AsFloat, endPos["z"].AsFloat);
-                        newMovement.EndRot = new Vector3(endRot["x"].AsFloat, endRot["y"].AsFloat, endRot["z"].AsFloat);
-
-                        newMovement.Delay = movement["Delay"].AsFloat;
-                        newMovement.Duration = Mathf.Clamp(movement["Duration"].AsFloat, 0.01f, float.MaxValue); // Make sure duration is at least 0.01 seconds, to avoid a divide by zero error
+                        if (jsonmovement.Delay != null) newMovement.Delay = float.Parse(jsonmovement.Delay);
+                        if (jsonmovement.Duration != null) newMovement.Duration = Mathf.Clamp(float.Parse(jsonmovement.Duration), 0.01f, float.MaxValue); // Make sure duration is at least 0.01 seconds, to avoid a divide by zero error
                         
-                        if (movement["EaseTransition"].IsBoolean)
-                            newMovement.EaseTransition = movement["EaseTransition"].AsBool;
+                        if (jsonmovement.EaseTransition != null)
+                            newMovement.EaseTransition = System.Convert.ToBoolean(jsonmovement.EaseTransition);
 
                         Movements.Add(newMovement);
                     }
@@ -137,7 +158,7 @@ namespace CameraPlus
         {
             if (to.name == "GameCore")
             {
-                var gp = Resources.FindObjectsOfTypeAll<GamePause>().First();
+                var gp = Resources.FindObjectsOfTypeAll<PauseController>().FirstOrDefault();
                 if (gp && dataLoaded && !data.ActiveInPauseMenu)
                 {
                     gp.didResumeEvent += Resume;
@@ -150,15 +171,30 @@ namespace CameraPlus
         {
             if (!dataLoaded || _paused) return;
 
-            if (movePerc == 1 && movementDelayEndTime <= DateTime.Now)
-                UpdatePosAndRot();
-                
-            long differenceTicks = (movementEndTime - movementStartTime).Ticks;
-            long currentTicks = (DateTime.Now - movementStartTime).Ticks;
-            movePerc = Mathf.Clamp((float)currentTicks / (float)differenceTicks, 0, 1);
+            if (_cameraPlus.Config.movementAudioSync)
+            {
+                if (_audioTimeSyncController == null) return;
 
+                if (movementNextStartTime <= _audioTimeSyncController.songTime)
+                    UpdatePosAndRot();
+
+                float difference = movementEndTime - movementStartTime;
+                float current = _audioTimeSyncController.songTime - movementStartTime;
+                if (difference != 0)
+                    movePerc = Mathf.Clamp(current / difference, 0, 1);
+            }
+            else
+            {
+                if (movePerc == 1 && movementDelayEndDateTime <= DateTime.Now)
+                    UpdatePosAndRot();
+
+                long differenceTicks = (movementEndDateTime - movementStartDateTime).Ticks;
+                long currentTicks = (DateTime.Now - movementStartDateTime).Ticks;
+                movePerc = Mathf.Clamp((float)currentTicks / (float)differenceTicks, 0, 1);
+            }
             _cameraPlus.ThirdPersonPos = LerpVector3(StartPos, EndPos, Ease(movePerc));
             _cameraPlus.ThirdPersonRot = LerpVector3(StartRot, EndRot, Ease(movePerc));
+            _cameraPlus.FOV(Mathf.Lerp(StartFOV,EndFOV,Ease(movePerc)));
         }
 
         protected Vector3 LerpVector3(Vector3 from, Vector3 to, float percent)
@@ -168,6 +204,10 @@ namespace CameraPlus
 
         public virtual bool Init(CameraPlusBehaviour cameraPlus)
         {
+            if (_audioTimeSyncController == null)
+            {
+                _audioTimeSyncController = Resources.FindObjectsOfTypeAll<AudioTimeSyncController>().FirstOrDefault();
+            }
             _cameraPlus = cameraPlus;
             Plugin.Instance.ActiveSceneChanged += OnActiveSceneChanged;
             return LoadCameraData(cameraPlus.Config.movementScriptPath);
@@ -191,15 +231,22 @@ namespace CameraPlus
         {
             if (!_paused) return;
 
-            TimeSpan diff = DateTime.Now - _pauseTime;
-            movementStartTime += diff;
-            movementEndTime += diff;
-            movementDelayEndTime += diff;
             _paused = false;
         }
 
-        protected bool LoadCameraData(string path)
+        protected bool LoadCameraData(string pathFile)
         {
+            string path="";
+            if (File.Exists(pathFile))
+                path = pathFile;
+            else if (File.Exists(Path.Combine(UnityGame.UserDataPath, Plugin.Name, "Scripts", pathFile)))
+            {
+                path = Path.Combine(UnityGame.UserDataPath, Plugin.Name, "Scripts", pathFile);
+            }
+            else if (File.Exists(Path.Combine(UnityGame.UserDataPath, Plugin.Name, "Scripts", Path.GetFileName(pathFile))))
+            {
+                path = Path.Combine(UnityGame.UserDataPath, Plugin.Name, "Scripts", Path.GetFileName(pathFile));
+            }
             if (File.Exists(path))
             {
                 string jsonText = File.ReadAllText(path);
@@ -235,7 +282,6 @@ namespace CameraPlus
 
         protected void UpdatePosAndRot()
         {
-            eventID++;
             if (eventID >= data.Movements.Count)
                 eventID = 0;
 
@@ -247,11 +293,31 @@ namespace CameraPlus
             EndRot = new Vector3(data.Movements[eventID].EndRot.x, data.Movements[eventID].EndRot.y, data.Movements[eventID].EndRot.z);
             EndPos = new Vector3(data.Movements[eventID].EndPos.x, data.Movements[eventID].EndPos.y, data.Movements[eventID].EndPos.z);
 
+            if (data.Movements[eventID].StartFOV != 0)
+                StartFOV = data.Movements[eventID].StartFOV;
+            else
+                StartFOV = _cameraPlus.Config.fov;
+            if (data.Movements[eventID].EndFOV != 0)
+                EndFOV = data.Movements[eventID].EndFOV;
+            else
+                EndFOV = _cameraPlus.Config.fov;
+
             FindShortestDelta(ref StartRot, ref EndRot);
 
-            movementStartTime = DateTime.Now;
-            movementEndTime = movementStartTime.AddSeconds(data.Movements[eventID].Duration);
-            movementDelayEndTime = movementStartTime.AddSeconds(data.Movements[eventID].Duration + data.Movements[eventID].Delay);
+            if (_cameraPlus.Config.movementAudioSync)
+            {
+                movementStartTime = movementNextStartTime;
+                movementEndTime = movementNextStartTime + data.Movements[eventID].Duration;
+                movementNextStartTime = movementEndTime + data.Movements[eventID].Delay;
+            }
+            else
+            {
+                movementStartDateTime = DateTime.Now;
+                movementEndDateTime = movementStartDateTime.AddSeconds(data.Movements[eventID].Duration);
+                movementDelayEndDateTime = movementStartDateTime.AddSeconds(data.Movements[eventID].Duration + data.Movements[eventID].Delay);
+            }
+
+            eventID++;
         }
 
         protected float Ease(float p)

@@ -46,6 +46,10 @@
       <HintPath>$(BeatSaberDir)\Beat Saber_Data\Managed\HMUI.dll</HintPath>
       <Private>False</Private>
     </Reference>
+    <Reference Include="BGNet">
+      <HintPath>$(BeatSaberDir)\Beat Saber_Data\Managed\BGNet.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
     <Reference Include="IPA.Loader, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>$(BeatSaberDir)\Beat Saber_Data\Managed\IPA.Loader.dll</HintPath>
@@ -58,6 +62,11 @@
     <Reference Include="Main, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>$(BeatSaberDir)\Beat Saber_Data\Managed\Main.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Newtonsoft.Json, Version=12.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>$(BeatSaberDir)\Libs\Newtonsoft.Json.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="System" />
@@ -102,19 +111,22 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="CameraMovementJson.cs" />
     <Compile Include="CameraMoverPointer.cs" />
     <Compile Include="CameraPlusInstance.cs" />
     <Compile Include="CameraProfiles.cs" />
     <Compile Include="CameraUtilities.cs" />
     <Compile Include="Config.cs" />
+    <Compile Include="ConfigEntity.cs" />
     <Compile Include="ContextMenu.cs" />
     <Compile Include="Logger.cs" />
+    <Compile Include="MultiplayerSession.cs" />
     <Compile Include="Plugin.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="CameraPlusBehaviour.cs" />
     <Compile Include="ReflectionUtil.cs" />
+    <Compile Include="RootConfig.cs" />
     <Compile Include="ScreenCameraBehaviour.cs" />
-    <Compile Include="SimpleJSON.cs" />
     <Compile Include="CameraMovement.cs" />
     <Compile Include="TransparentWallsPatch.cs" />
     <Compile Include="Utilities.cs" />

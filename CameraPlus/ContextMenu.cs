@@ -1,10 +1,7 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using UnityEngine;
 using LogLevel = IPA.Logging.Logger.Level;
+
 namespace CameraPlus
 {
     public class ContextMenu : MonoBehaviour
@@ -22,28 +19,32 @@ namespace CameraPlus
         internal Vector2 mousePosition;
         internal bool showMenu;
         internal bool layoutMode = false;
+        internal bool scriptMode = false;
         internal bool profileMode = false;
         internal float amountMove = 0.1f;
         internal float amountRot = 0.1f;
         internal CameraPlusBehaviour parentBehaviour;
+        internal string[] scriptName;
+        internal int scriptPage;
         public void Awake()
         {
         }
         public void EnableMenu(Vector2 mousePos, CameraPlusBehaviour parentBehaviour)
         {
             this.enabled = true;
-     //       Console.WriteLine("Enable Menu");
             mousePosition = mousePos;
             showMenu = true;
             this.parentBehaviour = parentBehaviour;
             layoutMode = false;
+            scriptMode = false;
             profileMode = false;
+            scriptName = null;
+            scriptPage = 0;
         }
         public void DisableMenu()
         {
             if (!this) return;
             this.enabled = false;
-     //       Console.WriteLine("Disable Menu");
             showMenu = false;
         }
         void OnGUI()
@@ -62,10 +63,10 @@ namespace CameraPlus
                 Matrix4x4 originalMatrix = GUI.matrix;
                 GUI.matrix = Matrix4x4.TRS(new Vector3(0, 0, 0), Quaternion.identity, scale);
                 //Layer boxes for Opacity
-                GUI.Box(new Rect(menuPos.x - 5, menuPos.y, 310, 470), "CameraPlus");
-                GUI.Box(new Rect(menuPos.x - 5, menuPos.y, 310, 470), "CameraPlus");
-                GUI.Box(new Rect(menuPos.x - 5, menuPos.y, 310, 470), "CameraPlus");
-                if (!layoutMode && !profileMode)
+                GUI.Box(new Rect(menuPos.x - 5, menuPos.y, 310, 470), "CameraPlus" + parentBehaviour.name);
+                GUI.Box(new Rect(menuPos.x - 5, menuPos.y, 310, 470), "CameraPlus" + parentBehaviour.name);
+                GUI.Box(new Rect(menuPos.x - 5, menuPos.y, 310, 470), "CameraPlus" + parentBehaviour.name);
+                if (!layoutMode && !profileMode && !scriptMode)
                 {
                     if (GUI.Button(new Rect(menuPos.x, menuPos.y + 25, 120, 30), new GUIContent("Add New Camera")))
                     {
@@ -175,17 +176,30 @@ namespace CameraPlus
                         parentBehaviour.CloseContextMenu();
                         parentBehaviour.Config.Save();
                     }
-                    if (GUI.Button(new Rect(menuPos.x, menuPos.y + 225, 300, 30), new GUIContent("Profile Saver")))
+                    if (GUI.Button(new Rect(menuPos.x, menuPos.y + 225, 120, 30), new GUIContent(parentBehaviour.Config.displayUI ? "Show UI" : "Hide UI")))
+                    {
+                        parentBehaviour.Config.displayUI = !parentBehaviour.Config.displayUI;
+                        parentBehaviour.SetCullingMask();
+                        parentBehaviour.CloseContextMenu();
+                        parentBehaviour.Config.Save();
+                    }
+                    if (GUI.Button(new Rect(menuPos.x, menuPos.y + 265, 300, 30), new GUIContent("Profile Saver")))
                     {
                         profileMode = true;
                     }
-                    if (GUI.Button(new Rect(menuPos.x, menuPos.y + 430, 300, 30), new GUIContent("Close Menu")))
+                    if (GUI.Button(new Rect(menuPos.x, menuPos.y + 305, 300, 30), new GUIContent("MovementScript")))
                     {
-                        parentBehaviour.CloseContextMenu();
+                        scriptMode = true;
+                        scriptName = CameraUtilities.MovementScriptList();
                     }
-                    if (GUI.Button(new Rect(menuPos.x, menuPos.y + 265, 300, 30), new GUIContent("Spawn 38 Cameras")))
+                    /*
+                    if (GUI.Button(new Rect(menuPos.x, menuPos.y + 385, 300, 30), new GUIContent("Spawn 38 Cameras")))
                     {
                         parentBehaviour.StartCoroutine(CameraUtilities.Spawn38Cameras());
+                        parentBehaviour.CloseContextMenu();
+                    }*/
+                    if (GUI.Button(new Rect(menuPos.x, menuPos.y + 430, 300, 30), new GUIContent("Close Menu")))
+                    {
                         parentBehaviour.CloseContextMenu();
                     }
                 }
@@ -204,29 +218,37 @@ namespace CameraPlus
                         parentBehaviour.CloseContextMenu();
                     }
                     //Layer
-                    GUI.Box(new Rect(menuPos.x, menuPos.y + 60, 140, 55), "Layer: " + parentBehaviour.Config.layer);
-                    if (GUI.Button(new Rect(menuPos.x+5, menuPos.y + 80, 60, 30), new GUIContent("-")))
+                    GUI.Box(new Rect(menuPos.x, menuPos.y + 60, 100, 55), "Layer: " + parentBehaviour.Config.layer);
+                    if (GUI.Button(new Rect(menuPos.x+5, menuPos.y + 80, 40, 30), new GUIContent("-")))
                     {
                         parentBehaviour.Config.layer--;
                         parentBehaviour.CreateScreenRenderTexture();
                         parentBehaviour.Config.Save();
                     }
-                    if (GUI.Button(new Rect(menuPos.x + 75, menuPos.y + 80, 60, 30), new GUIContent("+")))
+                    if (GUI.Button(new Rect(menuPos.x + 55, menuPos.y + 80, 40, 30), new GUIContent("+")))
                     {
                         parentBehaviour.Config.layer++;
                         parentBehaviour.CreateScreenRenderTexture();
                         parentBehaviour.Config.Save();
                     }
+                    //MultiPlayerOffset
+                    GUI.Box(new Rect(menuPos.x + 100, menuPos.y + 60, 100, 55), "Multiplayer");
+                    if (GUI.Button(new Rect(menuPos.x + 105, menuPos.y + 80, 90, 30), new GUIContent(parentBehaviour.Config.MultiPlayerNumber == 5 ? "FollowUpOff" : $"Player {parentBehaviour.Config.MultiPlayerNumber + 1}")))
+                    {
+                        parentBehaviour.Config.MultiPlayerNumber++;
+                        if (parentBehaviour.Config.MultiPlayerNumber > 5) parentBehaviour.Config.MultiPlayerNumber = 0;
+                        parentBehaviour.Config.Save();
+                    }
                     //FOV
-                    GUI.Box(new Rect(menuPos.x+155, menuPos.y + 60, 140, 55), "FOV: " + parentBehaviour.Config.fov);
-                    if (GUI.Button(new Rect(menuPos.x+160, menuPos.y + 80, 60, 30), new GUIContent("-")))
+                    GUI.Box(new Rect(menuPos.x+200, menuPos.y + 60, 100, 55), "FOV: " + parentBehaviour.Config.fov);
+                    if (GUI.Button(new Rect(menuPos.x+205, menuPos.y + 80, 40, 30), new GUIContent("-")))
                     {
                         parentBehaviour.Config.fov--;
                         parentBehaviour.SetFOV();
                         parentBehaviour.CreateScreenRenderTexture();
                         parentBehaviour.Config.Save();
                     }
-                    if (GUI.Button(new Rect(menuPos.x + 230, menuPos.y + 80, 60, 30), new GUIContent("+")))
+                    if (GUI.Button(new Rect(menuPos.x + 255, menuPos.y + 80, 40, 30), new GUIContent("+")))
                     {
                         parentBehaviour.Config.fov++;
                         parentBehaviour.SetFOV();
@@ -449,37 +471,94 @@ namespace CameraPlus
                         parentBehaviour.Config.Save();
                     }
                     //Close
-                    if (GUI.Button(new Rect(menuPos.x, menuPos.y + 430, 290, 30), new GUIContent("Close Layout Menu")))
+                    if (GUI.Button(new Rect(menuPos.x, menuPos.y + 430, 300, 30), new GUIContent("Close Layout Menu")))
                     {
                         layoutMode = false;
                     }
+                }
+                else if (scriptMode)
+                {
+                    if (GUI.Button(new Rect(menuPos.x, menuPos.y + 25, 300, 30), new GUIContent(parentBehaviour.Config.movementAudioSync ? "to Movementscript with UnityTimer" : "to Movementscript Sync Audio")))
+                    {
+                        parentBehaviour.Config.movementAudioSync = !parentBehaviour.Config.movementAudioSync;
+                        parentBehaviour.SetCullingMask();
+                        parentBehaviour.Config.Save();
+                    }
 
-
+                    if (GUI.Button(new Rect(menuPos.x, menuPos.y + 105, 80, 30), new GUIContent("<")))
+                    {
+                        if(scriptPage > 0) scriptPage--;
+                    }
+                    GUI.Box(new Rect(menuPos.x + 80, menuPos.y + 105, 140, 30), new GUIContent($"{scriptPage + 1} / {Math.Ceiling(Decimal.Parse(scriptName.Length.ToString()) / 5)}"));
+                    if (GUI.Button(new Rect(menuPos.x +220, menuPos.y + 105, 80, 30), new GUIContent(">")))
+                    {
+                        if (scriptPage < Math.Ceiling(Decimal.Parse(scriptName.Length.ToString()) / 5) - 1) scriptPage++;
+                    }
+                    for (int i = scriptPage * 5 ; i < scriptPage * 5 + 5; i++) {
+                        if (i < scriptName.Length)
+                        {
+                            if (GUI.Button(new Rect(menuPos.x, menuPos.y + (i - scriptPage * 5) * 35 + 145, 300, 30),  new GUIContent(scriptName[i])))
+                            {
+                                parentBehaviour.Config.movementScriptPath = scriptName[i];
+                                parentBehaviour.Config.Save();
+                                parentBehaviour.AddMovementScript();
+                            }
+                        }
+                    }
+                    if (GUI.Button(new Rect(menuPos.x, menuPos.y + 330, 300, 30), new GUIContent("Movement Off")))
+                    {
+                        parentBehaviour.Config.movementScriptPath = String.Empty;
+                        parentBehaviour.Config.Save();
+                        parentBehaviour.ClearMovementScript();
+                    }
+                    //Close
+                    if (GUI.Button(new Rect(menuPos.x, menuPos.y + 430, 300, 30), new GUIContent("Close MovementScript Menu")))
+                    {
+                        scriptMode = false;
+                    }
                 }
                 else if (profileMode)
                 {
-                    if (GUI.Button(new Rect(menuPos.x, menuPos.y + 45, 140, 30), new GUIContent("<")))
+                    if (GUI.Button(new Rect(menuPos.x, menuPos.y + 25, 140, 30), new GUIContent("<")))
                         CameraProfiles.TrySetLast(CameraProfiles.currentlySelected);
-                    if (GUI.Button(new Rect(menuPos.x + 155, menuPos.y + 45, 140, 30), new GUIContent(">")))
+                    if (GUI.Button(new Rect(menuPos.x + 155, menuPos.y + 25, 140, 30), new GUIContent(">")))
                         CameraProfiles.SetNext(CameraProfiles.currentlySelected);
-                    if (GUI.Button(new Rect(menuPos.x + 30, menuPos.y + 85, 230, 100), new GUIContent("Currently Selected:\n" + CameraProfiles.currentlySelected)))
+                    if (GUI.Button(new Rect(menuPos.x + 30, menuPos.y + 65, 230, 80), new GUIContent("Currently Selected:\n" + CameraProfiles.currentlySelected)))
                         CameraProfiles.SetNext(CameraProfiles.currentlySelected);
-                    if (GUI.Button(new Rect(menuPos.x, menuPos.y + 225, 140, 30), new GUIContent("Save")))
+                    if (GUI.Button(new Rect(menuPos.x, menuPos.y + 155, 140, 30), new GUIContent("Save")))
                         CameraProfiles.SaveCurrent();
-                    if (GUI.Button(new Rect(menuPos.x + 150, menuPos.y + 225, 140, 30), new GUIContent("Delete")))
-                        CameraProfiles.DeleteProfile(CameraProfiles.currentlySelected);
-                    if (GUI.Button(new Rect(menuPos.x, menuPos.y + 265, 290, 30), new GUIContent("Load Selected")))
+                    if (GUI.Button(new Rect(menuPos.x + 150, menuPos.y + 155, 140, 30), new GUIContent("Delete")))
                     {
-                        var cs = Resources.FindObjectsOfTypeAll<CameraPlusBehaviour>();
-                        foreach (var c in cs)
-                            CameraUtilities.RemoveCamera(c);
-                        foreach (var csi in Plugin.Instance.Cameras.Values)
-                            Destroy(csi.Instance.gameObject);
-                        Plugin.Instance.Cameras.Clear();
-                        CameraProfiles.SetProfile(CameraProfiles.currentlySelected);
-                        CameraUtilities.ReloadCameras();
+                        if (!Plugin.Instance._rootConfig.ProfileLoadCopyMethod)
+                            Plugin.Instance._profileChanger.ProfileChange(null);
+                        CameraProfiles.DeleteProfile(CameraProfiles.currentlySelected);
+                        CameraProfiles.TrySetLast();
                     }
-                    if (GUI.Button(new Rect(menuPos.x, menuPos.y + 305, 290, 30), new GUIContent("Close Profile Menu")))
+                    if (GUI.Button(new Rect(menuPos.x, menuPos.y + 195, 290, 30), new GUIContent("Load Selected")))
+                        Plugin.Instance._profileChanger.ProfileChange(CameraProfiles.currentlySelected);
+                    if (GUI.Button(new Rect(menuPos.x, menuPos.y + 245, 290, 30), new GUIContent(Plugin.Instance._rootConfig.ProfileSceneChange ? "To SceneChange Off" : "To SceneChange On")))
+                    {
+                        Plugin.Instance._rootConfig.ProfileSceneChange = !Plugin.Instance._rootConfig.ProfileSceneChange;
+                        Plugin.Instance._rootConfig.Save();
+                    }
+                    if (Plugin.Instance._rootConfig.ProfileSceneChange)
+                    {
+                        GUI.Box(new Rect(menuPos.x, menuPos.y + 285, 290, 30), "Menu Scene Profile : " + (Plugin.Instance._rootConfig.MenuProfile));
+                        GUI.Box(new Rect(menuPos.x, menuPos.y + 315, 290, 30), "Game Scene Profile : " + (Plugin.Instance._rootConfig.GameProfile));
+                        if (GUI.Button(new Rect(menuPos.x, menuPos.y + 345, 140, 30), new GUIContent("Set Menu Selected")))
+                            Plugin.Instance._rootConfig.MenuProfile = CameraProfiles.currentlySelected;
+                        if (GUI.Button(new Rect(menuPos.x + 150, menuPos.y + 345, 140, 30), new GUIContent("Set Game Selected")))
+                            Plugin.Instance._rootConfig.GameProfile = CameraProfiles.currentlySelected;
+                    }
+                    /*
+                    if (GUI.Button(new Rect(menuPos.x, menuPos.y + 390, 290, 30), new GUIContent(Plugin.Instance._rootConfig.ProfileLoadCopyMethod ? "To Folder Reference Method" : "To File Copy Method")))
+                    {
+                        Plugin.Instance._rootConfig.ProfileLoadCopyMethod = !Plugin.Instance._rootConfig.ProfileLoadCopyMethod;
+                        Plugin.Instance._rootConfig.Save();
+                        Plugin.Instance._profileChanger.ProfileChange(null);
+                    }
+                    */
+                    if (GUI.Button(new Rect(menuPos.x, menuPos.y + 430, 300, 30), new GUIContent("Close Profile Menu")))
                         profileMode = false;
                 }
 

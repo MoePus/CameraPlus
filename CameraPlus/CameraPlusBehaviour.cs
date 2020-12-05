@@ -28,10 +28,11 @@ namespace CameraPlus
 
         protected readonly WaitUntil _waitForMainCamera = new WaitUntil(() => Camera.main);
         private readonly WaitForSecondsRealtime _waitForSecondsRealtime = new WaitForSecondsRealtime(1f);
-        protected const int OnlyInThirdPerson = 21;
-        protected const int OnlyInFirstPerson = 22; //Moved to an empty layer because layer 4 overlapped the floor
+        protected const int OnlyInThirdPerson = 3;
+        protected const int UILayer = 5;
+        protected const int OnlyInFirstPerson = 6; //Moved to an empty layer because layer 4 overlapped the floor
         protected const int NotesDebriLayer = 9;
-        protected const int AlwaysVisible = 23; // For BeatSaberCunstomAvatars above v5.0.0
+        protected const int AlwaysVisible = 10;
         public bool ThirdPerson {
             get { return _thirdPerson; }
             set {
@@ -43,6 +44,7 @@ namespace CameraPlus
                 {
                     _cam.cullingMask &= ~(1 << OnlyInFirstPerson);
                     _cam.cullingMask |= 1 << OnlyInThirdPerson;
+
                 }
                 else
                 {
@@ -55,6 +57,8 @@ namespace CameraPlus
         protected bool _thirdPerson;
         public Vector3 ThirdPersonPos;
         public Vector3 ThirdPersonRot;
+        public Vector3 OffsetPosition;
+        public Vector3 OffsetAngle;
         public Config Config;
 
         protected RenderTexture _camRenderTexture;
@@ -110,7 +114,7 @@ namespace CameraPlus
 
             Config = config;
             _isMainCamera = Path.GetFileName(Config.FilePath) == $"{Plugin.MainCamera}.cfg";
-            _contextMenuEnabled = !Environment.CommandLine.Contains("fpfc");
+            _contextMenuEnabled = Array.IndexOf(Environment.GetCommandLineArgs(), "fpfc") == -1;
 
             StartCoroutine(DelayedInit());
         }
@@ -174,6 +178,7 @@ namespace CameraPlus
             _cameraCube = _cameraCubeGO.transform;
             _cameraCube.localScale = new Vector3(0.15f, 0.15f, 0.22f);
             _cameraCube.name = "CameraCube";
+            _cameraCubeGO.layer = Plugin.Instance._rootConfig.CameraQuadLayer;
 
             _quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
             DontDestroyOnLoad(_quad);
@@ -184,6 +189,7 @@ namespace CameraPlus
             _quad.transform.localEulerAngles = new Vector3(0, 180, 0);
             _quad.transform.localScale = new Vector3(_cam.aspect, 1, 1);
             _cameraPreviewQuad = _quad;
+            _quad.layer = Plugin.Instance._rootConfig.CameraQuadLayer;
 
             ReadConfig();
 
@@ -207,11 +213,16 @@ namespace CameraPlus
             CameraMovement.CreateExampleScript();
 
             Plugin.Instance.ActiveSceneChanged += SceneManager_activeSceneChanged;
-
             //      FirstPersonOffset = Config.FirstPersonPositionOffset;
             //       FirstPersonRotationOffset = Config.FirstPersonRotationOffset;
             SceneManager_activeSceneChanged(new Scene(), new Scene());
             Logger.Log($"Camera \"{Path.GetFileName(Config.FilePath)}\" successfully initialized! {Convert.ToString(_cam.cullingMask,16)}");
+
+            if (!Plugin.Instance.MultiplayerSessionInit)
+            {
+                Plugin.Instance.MultiplayerSessionInit = true;
+                MultiplayerSession.Init();
+            }
         }
 
         protected virtual void OnDestroy()
@@ -340,6 +351,12 @@ namespace CameraPlus
             if (_moverPointer) Destroy(_moverPointer);
             _moverPointer = pointer.gameObject.AddComponent<CameraMoverPointer>();
             _moverPointer.Init(this, _cameraCube);
+
+            if (to.name == "GameCore" && Config.movementScriptPath != String.Empty && Config.movementAudioSync)
+            {
+                AddMovementScript();
+                Logger.Log($"Add MoveScript \"{Path.GetFileName(Config.movementScriptPath)}\" successfully initialized! {Convert.ToString(_cam.cullingMask, 16)}");
+            }
         }
 
         [DllImport("user32.dll")]
@@ -377,22 +394,45 @@ namespace CameraPlus
                 }
             }
             HandleMouseEvents();
+            //PlayerOffset = multiplayerConnectedPlayerSpectatingSpot.transform.position;
+            //Logger.Log($"Player Offset : {PlayerOffset.x},{PlayerOffset.y},{PlayerOffset.z}", LogLevel.Notice);
         }
 
         protected virtual void LateUpdate()
         {
             try
             {
+                OffsetPosition = new Vector3();
+                OffsetAngle = new Vector3();
+
                 var camera = _mainCamera.transform;
+
+                HandleMultiPlayerLobby();
+                HandleMultiPlayerGame();
 
                 if (ThirdPerson)
                 {
-
                     HandleThirdPerson360();
+
                     transform.position = ThirdPersonPos;
                     transform.eulerAngles = ThirdPersonRot;
                     _cameraCube.position = ThirdPersonPos;
                     _cameraCube.eulerAngles = ThirdPersonRot;
+
+                    if (OffsetPosition != Vector3.zero && OffsetAngle != Vector3.zero)
+                    {
+                        transform.position = ThirdPersonPos + OffsetPosition;
+                        transform.eulerAngles = ThirdPersonRot + OffsetAngle;
+                        _cameraCube.position = ThirdPersonPos + OffsetPosition;
+                        _cameraCube.eulerAngles = ThirdPersonRot + OffsetAngle;
+
+                        Quaternion angle = Quaternion.AngleAxis(OffsetAngle.y, Vector3.up);
+                        transform.position -= OffsetPosition;
+                        transform.position = angle * transform.position;
+                        transform.position += OffsetPosition;
+                        _cameraCube.position = transform.position;
+                    }
+
                     return;
                 }
                 //     Console.WriteLine(Config.FirstPersonPositionOffset.ToString());
@@ -409,15 +449,14 @@ namespace CameraPlus
                         Config.rotationSmooth * Time.unscaledDeltaTime);
                     transform.rotation = rot * Quaternion.Euler(0, 0, -(rot.eulerAngles.z));
                 }
-
             }
-            catch { }
+            catch{ }
         }
 
         private void HandleThirdPerson360()
         {
             if (!_beatLineManager || !Config.use360Camera || !_environmentSpawnRotation) return;
-
+            
             float b;
             if (_beatLineManager.isMidRotationValid)
             {
@@ -445,7 +484,65 @@ namespace CameraPlus
             ThirdPersonPos = new Vector3(ThirdPersonPos.x, Config.cam360UpOffset, ThirdPersonPos.z);
         }
 
-        protected void AddMovementScript()
+        private void HandleMultiPlayerLobby()
+        {
+            try
+            {
+                if (MultiplayerSession.LobbyContoroller == null || !MultiplayerSession.LobbyContoroller.isActiveAndEnabled || Config.MultiPlayerNumber == 0) return;
+                if (MultiplayerSession.LobbyAvatarPlace.Count == 0) MultiplayerSession.LoadLobbyAvatarPlace();
+
+                for (int i=0; i< MultiplayerSession.LobbyAvatarPlace.Count;i++)
+                {
+                    if (i==Config.MultiPlayerNumber - 1)
+                    {
+                        OffsetPosition = MultiplayerSession.LobbyAvatarPlace[i].position;
+                        OffsetAngle = MultiplayerSession.LobbyAvatarPlace[i].eulerAngles;
+                        break;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Log($"HandleMultiPlayerLobby Error {ex.Message}", LogLevel.Error);
+            }
+        }
+        private void HandleMultiPlayerGame()
+        {
+            try
+            {
+                if (SceneManager.GetActiveScene().name == "GameCore" && MultiplayerSession.ConnectedMultiplay)
+                {
+                    MultiplayerConnectedPlayerFacade player = null;
+                    bool TryPlayerFacade;
+                    if (MultiplayerSession.playersManager == null)
+                    {
+                        MultiplayerSession.playersManager = Resources.FindObjectsOfTypeAll<MultiplayerPlayersManager>().FirstOrDefault();
+                        Logger.Log($"{this.name} Set MultiplayerPlayersManager", LogLevel.Notice);
+                    }
+                    if (Config.MultiPlayerNumber != 0 && MultiplayerSession.playersManager != null)
+                    {
+                        foreach(IConnectedPlayer connectedPlayer in MultiplayerSession.connectedPlayers)
+                        {
+                            if (Config.MultiPlayerNumber - 1 == connectedPlayer.sortIndex)
+                            {
+                                TryPlayerFacade = MultiplayerSession.playersManager.TryGetConnectedPlayerController(connectedPlayer.userId, out player);
+                                if (TryPlayerFacade && player != null)
+                                {
+                                    OffsetPosition = player.transform.position;
+                                    OffsetAngle = player.transform.eulerAngles;
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Log($"{this.name} HandleMultiPlayerGame Error {ex.Message}", LogLevel.Error);
+            }
+        }
+        public void AddMovementScript()
         {
             if (Config.movementScriptPath != String.Empty)
             {
@@ -454,11 +551,28 @@ namespace CameraPlus
 
                 if (Config.movementScriptPath == "SongMovementScript")
                     _cameraMovement = _cam.gameObject.AddComponent<SongCameraMovement>();
-                else if (File.Exists(Config.movementScriptPath))
+                else if (File.Exists(Config.movementScriptPath) || 
+                        File.Exists(Path.Combine(UnityGame.UserDataPath, Plugin.Name, "Scripts", Config.movementScriptPath)) || 
+                        File.Exists(Path.Combine(UnityGame.UserDataPath, Plugin.Name, "Scripts", Path.GetFileName(Config.movementScriptPath))))
                     _cameraMovement = _cam.gameObject.AddComponent<CameraMovement>();
                 else
                     return;
-
+                if (_cameraMovement.Init(this))
+                {
+                    ThirdPersonPos = Config.Position;
+                    ThirdPersonRot = Config.Rotation;
+                    Config.thirdPerson = true;
+                    ThirdPerson = true;
+                    CreateScreenRenderTexture();
+                }
+            }
+        }
+        public void ClearMovementScript()
+        {
+            if (Config.movementScriptPath == String.Empty)
+            {
+                if (_cameraMovement)
+                    _cameraMovement.Shutdown();
                 if (_cameraMovement.Init(this))
                 {
                     ThirdPersonPos = Config.Position;
@@ -504,6 +618,11 @@ namespace CameraPlus
             _cam.fieldOfView = Config.fov;
         }
 
+        internal virtual void FOV(float FOV)
+        {
+            _cam.fieldOfView = FOV;
+        }
+
         internal virtual void SetCullingMask()
         {
             _cam.cullingMask = Camera.main.cullingMask;
@@ -529,7 +648,7 @@ namespace CameraPlus
                     _cam.cullingMask &= ~(1 << OnlyInThirdPerson);
                 }
                 _cam.cullingMask |= 1 << AlwaysVisible;
-            }
+             }
             else
             {
                 _cam.cullingMask &= ~(1 << OnlyInThirdPerson);
@@ -543,6 +662,10 @@ namespace CameraPlus
                 else
                     _cam.cullingMask &= ~(1 << NotesDebriLayer);
             }
+            if (Config.displayUI)
+                _cam.cullingMask &= ~(1 << UILayer);
+            else
+                _cam.cullingMask |= (1 << UILayer);
         }
 
         public bool IsWithinRenderArea(Vector2 mousePos, Config c)

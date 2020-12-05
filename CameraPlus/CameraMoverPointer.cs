@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using System.Collections;
+using UnityEngine;
 using VRUIControls;
 
 namespace CameraPlus
@@ -48,22 +49,24 @@ namespace CameraPlus
 
         protected virtual void Update()
         {
-            if (_vrPointer.vrController != null)
-                if (_vrPointer.vrController.triggerValue > 0.9f)
-                {
-                    if (_grabbingController != null) return;
-                    if (Physics.Raycast(_vrPointer.vrController.position, _vrPointer.vrController.forward, out var hit, MaxLaserDistance))
+            if (_vrPointer != null) {
+                if (_vrPointer.vrController != null)
+                    if (_vrPointer.vrController.triggerValue > 0.9f)
                     {
-                        if (hit.transform != _cameraCube) return;
-                        _grabbingController = _vrPointer.vrController;
-                        _grabPos = _vrPointer.vrController.transform.InverseTransformPoint(_cameraCube.position);
-                        _grabRot = Quaternion.Inverse(_vrPointer.vrController.transform.rotation) * _cameraCube.rotation;
+                        if (_grabbingController != null) return;
+                        if (Physics.Raycast(_vrPointer.vrController.position, _vrPointer.vrController.forward, out var hit, MaxLaserDistance))
+                        {
+                            if (hit.transform != _cameraCube) return;
+                            _grabbingController = _vrPointer.vrController;
+                            _grabPos = _vrPointer.vrController.transform.InverseTransformPoint(_cameraCube.position);
+                            _grabRot = Quaternion.Inverse(_vrPointer.vrController.transform.rotation) * _cameraCube.rotation;
+                        }
                     }
-                }
 
-            if (_grabbingController == null || !(_grabbingController.triggerValue <= 0.9f)) return;
-            SaveToConfig();
-            _grabbingController = null;
+                if (_grabbingController == null || !(_grabbingController.triggerValue <= 0.9f)) return;
+                SaveToConfig();
+                _grabbingController = null;
+            }
         }
 
         protected virtual void LateUpdate()

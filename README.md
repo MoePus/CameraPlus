@@ -27,6 +27,27 @@ To edit the settings of any camera in real time, right click on the Beat Saber g
 
 Press <kbd>F1</kbd> to toggle the main camera between first and third person.
 
+## RootConfig
+After you run the game once, a `CameraPlus.ini` file is created within the folder Beat Saber\UserData. This file controls profile switching between menu scenes and game scenes.
+Edit that file to configure Profile change:
+
+| Parameter                   | Description                                                                                  |
+|-----------------------------|----------------------------------------------------------------------------------------------|
+| **ProfileSceneChange**      | When set to True, profile switching is enabled in the Menu scene and Game scene.             |
+| **MenuProfile**             | Enter the profile name to be read in the Menu scene.                                         |
+| **GameProfile**             | Enter the profile name to be read in the Game scene.                                         |
+| **CurrentProfile**          | It is currently not working. This is for the next version.                                   |
+| **CameraQuadLayer**         | Changes the display layer of the third person camera. Basically, do not move it from zero.   |
+| **ForceDisableSmoothCamera**| Automatically turn off SmoothCamera at game launch.                                          |
+### Profile Name
+![ProfileName](https://github.com/Snow1226/CameraPlus/blob/master/ScreenShot_ProfileChange.png)
+
+Open the Profile menu from Profile Saver in the right-click menu.
+The profile name is displayed under Cullently Selected.
+Please describe this in ini above.
+Example) MenuProfile = "CameraPlusProfile"
+
+## CameraConfig
 After you run the game once, a `cameraplus.cfg` file is created within the folder Beat Saber\UserData\CameraPlus. Any cfg files located in this folder will be used to render additional cameras.
 Edit that file to configure CameraPlus:
 
@@ -64,20 +85,27 @@ Edit that file to configure CameraPlus:
 | **screenHeight**            | Height of the camera render area                                                             |
 | **screenPosX**              | X position of the camera in the Beat Saber window                                            |
 | **screenPosY**              | Y position of the camera in the Beat Saber window                                            |
+| **MultiplayerNumber**       | Shift the central axis of the camera to the participants in the official mulch.              |
+|                             |  (0=Off, 1=Host, 2~=Participants)                                                            |
 | **layer**                   | Layer to render the camera on **(HIGHER NUMBER = top)**                                      |
 | **fitToCanvas**             | Force camera to stretch to fit window                                                        |
 | **transparentWalls**        | Make Walls appear transparent on the camera                                                  |
 | **forceFirstPersonUpRight** | Lock rotation of first person camera on Z axis to keep the camera upright                    |
 | **Avatar**                  | Switch avatar display layer                                                                  |
 | **debri**                   | Switches between In-Game setting linkage, forced display, and forced off for Notes Debris.   |
-| **movementScriptPath**      | Full path (including file name) to the movement script file to associate with the camera     |
-
-ex) movementScriptpath = "C:\Program Files(x86)\Steam\steamapps\common\Beat Saber\UserData\CameraPlus\Scripts\ExampleMovementScript.json"
+| **displayUI**               | The cam+ screen toggles the UI display, hiding EnhancedStreamChat is currently not supported.|
+| **movementScriptPath**      | Enter the script file name, including the json extension.                                    |
+| **movementAudioSync**       | Syncs the transitional process of the move script to the game audio.                         |
 
 ## Movement Script
-The sample script described in MovementScriptPath is located in the Beat Saber \ UserData \ CameraPlus \ Scripts folder.
+The sample script described in MovementScriptPath is located in the "Beat Saber\UserData\CameraPlus\Scripts" folder.
 
-### If ActiveInPauseMenu is set to false, there is a bug that the script doesn't return to its original state when SteamVR screen is displayed. 
+movementScriptPath should contain either a "fullpath including the file name + extension" or "file name + extension json".
+
+ex) 
+1. movementScriptpath = "C:\Program Files(x86)\Steam\steamapps\common\Beat Saber\UserData\CameraPlus\Scripts\ExampleMovementScript.json"
+2. movementScriptpath = "ExampleMovementScript.json"
+
 ```xml
 {
     "ActiveInPauseMenu": true,     "ActiveInPauseMenu": Determines whether the camera pauses when pausing the game.
@@ -86,7 +114,8 @@ The sample script described in MovementScriptPath is located in the Beat Saber \
         "StartPos": {              "StartPos"         : Camera start position (the center of the play area is 0,0,0).
             "x": 2,
             "y": 1.75,
-            "z": -2
+            "z": -2,
+            "FOV": 90              "FOV"              : StartFOV (Optional)
         },
         "StartRot": {              "StartRot"         : The rotation at which the camera starts (0,0,0 looks straight at the main menu).
             "x": 15,
@@ -96,7 +125,8 @@ The sample script described in MovementScriptPath is located in the Beat Saber \
         "EndPos": {                "EndPos"           : The position where the camera ends.
             "x": 2,
             "y": 1,
-            "z": 9
+            "z": 9,
+            "FOV": 40              "FOV"              : EndFOV (Optional)
         },
         "EndRot": {                "EndRot"           : The rotation at which the camera ends.
             "x": 15,

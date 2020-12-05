@@ -7,7 +7,7 @@ namespace CameraPlus
     public class Config
     {
         public string FilePath { get; }
-        public float fov = 90;
+        public float fov = 50;
         public int antiAliasing = 2;
         public float renderScale = 1;
         public float positionSmooth = 10;
@@ -22,7 +22,7 @@ namespace CameraPlus
 
         public float posx;
         public float posy = 2;
-        public float posz = -1.2f;
+        public float posz = -3.0f;
 
         public float angx = 15;
         public float angy;
@@ -48,6 +48,8 @@ namespace CameraPlus
         public int screenPosX;
         public int screenPosY;
 
+        public int MultiPlayerNumber;
+
         public int layer = -1000;
 
         public bool fitToCanvas = false;
@@ -55,7 +57,9 @@ namespace CameraPlus
         public bool forceFirstPersonUpRight = false;
         public int avatar = 1;
         public string debri = "link";
+        public bool displayUI = false;
         public string movementScriptPath = String.Empty;
+        public bool movementAudioSync = true;
         //public int maxFps = 90;
 
         public event Action<Config> ConfigChangedEvent;
