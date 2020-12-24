@@ -44,13 +44,13 @@ namespace CameraPlus
                 {
                     _cam.cullingMask &= ~(1 << OnlyInFirstPerson);
                     _cam.cullingMask |= 1 << OnlyInThirdPerson;
-
                 }
                 else
                 {
                     _cam.cullingMask &= ~(1 << OnlyInThirdPerson);
                     _cam.cullingMask |= 1 << OnlyInFirstPerson;
                 }
+                _cam.cullingMask |= 1 << AlwaysVisible;
             }
         }
 
@@ -156,6 +156,7 @@ namespace CameraPlus
 
             _screenCamera = new GameObject("Screen Camera").AddComponent<ScreenCameraBehaviour>();
             _screenCamera.isMainCamera = _isMainCamera;
+            _screenCamera.Config = Config;
 
             if (_previewMaterial == null)
                 _previewMaterial = new Material(Shader.Find("Hidden/BlitCopyWithDepth"));
@@ -630,26 +631,27 @@ namespace CameraPlus
                 _cam.cullingMask &= ~(1 << TransparentWallsPatch.WallLayerMask);
             else
                 _cam.cullingMask |= (1 << TransparentWallsPatch.WallLayerMask);
-            if (Config.avatar > 0)
-            {
-                if (Config.avatar > 1)
-                {
-                    _cam.cullingMask = 0;
-                }
 
+            if (Config.avatar > 1) // avatar only
+            {
+                _cam.cullingMask = 1 << OnlyInThirdPerson;
+                _cam.cullingMask |= 1 << AlwaysVisible;
+            }
+            else if (Config.avatar > 0) // show avatar 
+            {
                 if (Config.thirdPerson || Config.use360Camera)
                 {
-                    _cam.cullingMask |= 1 << OnlyInThirdPerson;
                     _cam.cullingMask &= ~(1 << OnlyInFirstPerson);
+                    _cam.cullingMask |= 1 << OnlyInThirdPerson;
                 }
                 else
                 {
-                    _cam.cullingMask |= 1 << OnlyInFirstPerson;
                     _cam.cullingMask &= ~(1 << OnlyInThirdPerson);
+                    _cam.cullingMask |= 1 << OnlyInFirstPerson;
                 }
                 _cam.cullingMask |= 1 << AlwaysVisible;
-             }
-            else
+            }
+            else // hide avatar
             {
                 _cam.cullingMask &= ~(1 << OnlyInThirdPerson);
                 _cam.cullingMask &= ~(1 << OnlyInFirstPerson);

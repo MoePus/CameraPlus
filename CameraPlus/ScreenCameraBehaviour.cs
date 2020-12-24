@@ -14,6 +14,7 @@ namespace CameraPlus
         static public Shader shader;
         public Material mat;
         public bool isMainCamera;
+        public Config Config;
 
         public void SetRenderTexture(RenderTexture renderTexture)
         {
@@ -65,7 +66,7 @@ namespace CameraPlus
         {
             if (_renderTexture == null) return;
 
-            if (isMainCamera)
+            if (isMainCamera || Config.avatar < 2)
             {
                 Graphics.Blit(_renderTexture, dest);
             }
