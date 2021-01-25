@@ -7,6 +7,7 @@ namespace CameraPlus
     public class Config
     {
         public string FilePath { get; }
+        public bool LockScreen = false;
         public float fov = 50;
         public int antiAliasing = 2;
         public float renderScale = 1;
@@ -43,12 +44,16 @@ namespace CameraPlus
         public float cam360UpOffset = 2.2f;
         public float cam360RightOffset = 0f;
 
+        public bool NoodleTrack = false;
+
         public int screenWidth = Screen.width;
         public int screenHeight = Screen.height;
         public int screenPosX;
         public int screenPosY;
 
-        public int MultiPlayerNumber;
+        //public bool Orthographics = false;
+        public int MultiPlayerNumber = 0;
+        public bool DisplayMultiPlayerNameInfo = false;
 
         public int layer = -1000;
 
@@ -57,7 +62,7 @@ namespace CameraPlus
         public bool forceFirstPersonUpRight = false;
         public int avatar = 1;
         public string debri = "link";
-        public bool displayUI = false;
+        public bool HideUI = false;
         public string movementScriptPath = String.Empty;
         public bool movementAudioSync = true;
         //public int maxFps = 90;

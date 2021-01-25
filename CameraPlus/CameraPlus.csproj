@@ -143,6 +143,10 @@
     <EmbeddedResource Include="Resources\Resize_Horiz.png" />
     <EmbeddedResource Include="Resources\Resize_Vert.png" />
   </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\Lock.png" />
+    <EmbeddedResource Include="Resources\UnLock.png" />
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
     <PostBuildEvent>

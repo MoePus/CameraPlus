@@ -16,12 +16,12 @@ namespace CameraPlus
         public static bool ConnectedMultiplay;
         public static MultiplayerPlayersManager playersManager = null;
         public static MultiplayerLobbyController LobbyContoroller = null;
-        public static List<Transform> LobbyAvatarPlace;
+        public static List<Transform> LobbyAvatarPlaceList;
 
         public static void Init()
         {
             connectedPlayers = new List<IConnectedPlayer>();
-            LobbyAvatarPlace = new List<Transform>();
+            LobbyAvatarPlaceList = new List<Transform>();
             ConnectedMultiplay = false;
             SessionManager = Resources.FindObjectsOfTypeAll<MultiplayerSessionManager>().FirstOrDefault();
             if (SessionManager == null)
@@ -53,8 +53,7 @@ namespace CameraPlus
         {
             ConnectedMultiplay = true;
             connectedPlayers.Clear();
-            playersManager = Resources.FindObjectsOfTypeAll<MultiplayerPlayersManager>().FirstOrDefault();
-            Logger.Log($"SessionManager Connected", LogLevel.Info);
+            //playersManager = Resources.FindObjectsOfTypeAll<MultiplayerPlayersManager>().FirstOrDefault();
 
             LobbyContoroller = Resources.FindObjectsOfTypeAll<MultiplayerLobbyController>().FirstOrDefault();
             if (LobbyContoroller == null)
@@ -63,18 +62,24 @@ namespace CameraPlus
             Logger.Log($"ConnectedPlayer---------------", LogLevel.Info);
             for (int i = 0; i < connectedPlayers.Count; i++)
                 Logger.Log($"ConnectedPlayer {connectedPlayers[i].userName},{connectedPlayers[i].sortIndex}", LogLevel.Info);
+
+            if (Plugin.Instance._rootConfig.MultiplayerProfile != "" && Plugin.Instance._rootConfig.ProfileSceneChange)
+                Plugin.Instance._profileChanger.ProfileChange(Plugin.Instance._rootConfig.MultiplayerProfile);
+            LoadLobbyAvatarPlace();
         }
         private static void OnSessionDisconnected(DisconnectedReason reason)
         {
             ConnectedMultiplay = false;
             connectedPlayers.Clear();
-            LobbyAvatarPlace.Clear();
+            LobbyAvatarPlaceList.Clear();
             Logger.Log($"SessionManager Disconnected {reason}", LogLevel.Info);
+            if (Plugin.Instance._rootConfig.MenuProfile != "" && Plugin.Instance._rootConfig.ProfileSceneChange)
+                Plugin.Instance._profileChanger.ProfileChange(Plugin.Instance._rootConfig.MenuProfile);
         }
         private static void OnSessionPlayerConnected(IConnectedPlayer player)
         {
-            if (playersManager==null)
-                playersManager = Resources.FindObjectsOfTypeAll<MultiplayerPlayersManager>().FirstOrDefault();
+            //if (playersManager==null)
+            //    playersManager = Resources.FindObjectsOfTypeAll<MultiplayerPlayersManager>().FirstOrDefault();
 
             connectedPlayers.Add(player);
             connectedPlayers = connectedPlayers.OrderBy(pl => pl.sortIndex)
@@ -102,26 +107,38 @@ namespace CameraPlus
             try
             {
                 Transform LobbyOffset;
-                LobbyAvatarPlace.Clear();
-                foreach (MultiplayerLobbyAvatarPlace multiLobbyAvatarPlace in Resources.FindObjectsOfTypeAll<MultiplayerLobbyAvatarPlace>())
+                LobbyAvatarPlaceList.Clear();
+                MultiplayerLobbyAvatarPlace[] allLobbyAvatarPlace = Resources.FindObjectsOfTypeAll<MultiplayerLobbyAvatarPlace>();
+                Logger.Log($"Find LobbyAvatarPlace {allLobbyAvatarPlace.Length}",LogLevel.Notice);
+                foreach (MultiplayerLobbyAvatarPlace multiLobbyAvatarPlace in allLobbyAvatarPlace)
                 {
                     LobbyOffset = multiLobbyAvatarPlace.transform;
-                    LobbyAvatarPlace.Add(LobbyOffset);
+                    LobbyAvatarPlaceList.Add(LobbyOffset);
                 }
-                LobbyAvatarPlace.Select(tr => new { tr.position }).Distinct();
-                LobbyAvatarPlace = LobbyAvatarPlace.OrderByDescending(tr => tr.position.x).ToList();
-                for (int i = 0; i < LobbyAvatarPlace.Count ; i++)
+                LobbyAvatarPlaceList = LobbyAvatarPlaceList.GroupBy(p => p.position)
+                                                    .Select(g => g.First())
+                                                    .ToList();
+                if (LobbyAvatarPlaceList.Count <= 1)
                 {
-                    if (LobbyAvatarPlace[i].position == Vector3.zero)
+                    LobbyAvatarPlaceList.Clear();
+                    return;
+                }
+                for (int i = 0; i < LobbyAvatarPlaceList.Count; i++)
+                    Logger.Log($"Find LobbyAvatarPlace {i}: {LobbyAvatarPlaceList[i].position.x},{LobbyAvatarPlaceList[i].position.y},{LobbyAvatarPlaceList[i].position.z}", LogLevel.Notice);
+
+                LobbyAvatarPlaceList = LobbyAvatarPlaceList.OrderByDescending(tr => tr.position.x).ToList();
+                for (int i = 0; i < LobbyAvatarPlaceList.Count ; i++)
+                {
+                    if (LobbyAvatarPlaceList[i].position == Vector3.zero)
                     {
-                        Transform tr = LobbyAvatarPlace[i];
-                        LobbyAvatarPlace.RemoveAt(i);
-                        LobbyAvatarPlace.Insert(0, tr);
+                        Transform tr = LobbyAvatarPlaceList[i];
+                        LobbyAvatarPlaceList.RemoveAt(i);
+                        LobbyAvatarPlaceList.Insert(0, tr);
                         break;
                     }
                 }
                 List<Transform> Tr= ShiftLobbyPositionList(LocalPlayerSortIndex());
-                if (Tr != null) LobbyAvatarPlace = Tr;
+                if (Tr != null) LobbyAvatarPlaceList = Tr;
                 else
                     Logger.Log($"LobbyAvatarPlace SortError", LogLevel.Info);
                 
@@ -145,9 +162,9 @@ namespace CameraPlus
         }
         public static List<Transform> ShiftLobbyPositionList(int shiftValue)
         {
-            if (shiftValue < 0 || shiftValue >= LobbyAvatarPlace.Count) return null;
+            if (shiftValue < 0 || shiftValue >= LobbyAvatarPlaceList.Count) return null;
 
-            List<Transform> result = LobbyAvatarPlace;
+            List<Transform> result = LobbyAvatarPlaceList;
             for (int i=0; i < shiftValue ; i++)
             {
                 result.Insert(0,result[result.Count-1]);

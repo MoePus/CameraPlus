@@ -106,6 +106,9 @@ namespace CameraPlus
         public static bool wasWithinBorder = false;
         public static bool anyInstanceBusy = false;
         private static bool _contextMenuEnabled = true;
+        private MultiplayerScoreProvider ScoreProvider = null;
+        private GameObject adjustOffset;
+        private GameObject adjustParent;
 
         public virtual void Init(Config config)
         {
@@ -310,7 +313,15 @@ namespace CameraPlus
                     Config.screenWidth = Screen.width;
                     Config.screenHeight = Screen.height;
                 }
-
+                /*
+                _cam.orthographic = Config.Orthographics;
+                if (Config.Orthographics)
+                {
+                    _cam.orthographicSize = Config.fov / 10;
+                    _cam.farClipPlane = 10;
+                    _cam.nearClipPlane = 2;
+                }
+                */
                 _lastRenderUpdate = DateTime.Now;
                 //GetScaledScreenResolution(Config.renderScale, out var scaledWidth, out var scaledHeight);
                 _camRenderTexture.width = Mathf.Clamp(Mathf.RoundToInt(Config.screenWidth * Config.renderScale), 1, int.MaxValue);
@@ -395,16 +406,14 @@ namespace CameraPlus
                 }
             }
             HandleMouseEvents();
-            //PlayerOffset = multiplayerConnectedPlayerSpectatingSpot.transform.position;
-            //Logger.Log($"Player Offset : {PlayerOffset.x},{PlayerOffset.y},{PlayerOffset.z}", LogLevel.Notice);
         }
 
         protected virtual void LateUpdate()
         {
             try
             {
-                OffsetPosition = new Vector3();
-                OffsetAngle = new Vector3();
+                OffsetPosition = Vector3.zero;
+                OffsetAngle = Vector3.zero;
 
                 var camera = _mainCamera.transform;
 
@@ -415,23 +424,45 @@ namespace CameraPlus
                 {
                     HandleThirdPerson360();
 
-                    transform.position = ThirdPersonPos;
-                    transform.eulerAngles = ThirdPersonRot;
-                    _cameraCube.position = ThirdPersonPos;
-                    _cameraCube.eulerAngles = ThirdPersonRot;
+                    if (Config.NoodleTrack && SceneManager.GetActiveScene().name == "GameCore")
+                    {
+                        if (adjustOffset == null)
+                        {
+                            adjustOffset = new GameObject("OriginTarget");
+                            adjustParent = new GameObject("OriginParent");
+                            adjustOffset.transform.SetParent(adjustParent.transform);
+                            Plugin.Instance._origin = new GameObject("OriginParent").transform;
+                        }
+                        adjustParent.transform.position = Plugin.Instance._origin.position;
+                        adjustParent.transform.eulerAngles = Plugin.Instance._origin.eulerAngles;
+
+                        adjustOffset.transform.localPosition = ThirdPersonPos;
+                        adjustOffset.transform.localEulerAngles = ThirdPersonRot;
+
+                        transform.position = adjustOffset.transform.position;
+                        transform.eulerAngles = adjustOffset.transform.eulerAngles;
+                        _cameraCube.position = adjustOffset.transform.position;
+                        _cameraCube.eulerAngles = adjustOffset.transform.eulerAngles;
+                    }
+                    else
+                    {
+                        transform.position = ThirdPersonPos;
+                        transform.eulerAngles = ThirdPersonRot;
+                        _cameraCube.position = ThirdPersonPos;
+                        _cameraCube.eulerAngles = ThirdPersonRot;
+                    }
 
                     if (OffsetPosition != Vector3.zero && OffsetAngle != Vector3.zero)
                     {
                         transform.position = ThirdPersonPos + OffsetPosition;
                         transform.eulerAngles = ThirdPersonRot + OffsetAngle;
-                        _cameraCube.position = ThirdPersonPos + OffsetPosition;
-                        _cameraCube.eulerAngles = ThirdPersonRot + OffsetAngle;
-
                         Quaternion angle = Quaternion.AngleAxis(OffsetAngle.y, Vector3.up);
                         transform.position -= OffsetPosition;
                         transform.position = angle * transform.position;
                         transform.position += OffsetPosition;
+
                         _cameraCube.position = transform.position;
+                        _cameraCube.eulerAngles = transform.eulerAngles;
                     }
 
                     return;
@@ -490,14 +521,14 @@ namespace CameraPlus
             try
             {
                 if (MultiplayerSession.LobbyContoroller == null || !MultiplayerSession.LobbyContoroller.isActiveAndEnabled || Config.MultiPlayerNumber == 0) return;
-                if (MultiplayerSession.LobbyAvatarPlace.Count == 0) MultiplayerSession.LoadLobbyAvatarPlace();
+                if (MultiplayerSession.LobbyAvatarPlaceList.Count == 0) MultiplayerSession.LoadLobbyAvatarPlace();
 
-                for (int i=0; i< MultiplayerSession.LobbyAvatarPlace.Count;i++)
+                for (int i=0; i< MultiplayerSession.LobbyAvatarPlaceList.Count;i++)
                 {
                     if (i==Config.MultiPlayerNumber - 1)
                     {
-                        OffsetPosition = MultiplayerSession.LobbyAvatarPlace[i].position;
-                        OffsetAngle = MultiplayerSession.LobbyAvatarPlace[i].eulerAngles;
+                        OffsetPosition = MultiplayerSession.LobbyAvatarPlaceList[i].position;
+                        OffsetAngle = MultiplayerSession.LobbyAvatarPlaceList[i].eulerAngles;
                         break;
                     }
                 }
@@ -626,48 +657,51 @@ namespace CameraPlus
 
         internal virtual void SetCullingMask()
         {
-            _cam.cullingMask = Camera.main.cullingMask;
+            int builder = Camera.main.cullingMask;
             if (Config.transparentWalls)
-                _cam.cullingMask &= ~(1 << TransparentWallsPatch.WallLayerMask);
+                builder &= ~(1 << TransparentWallsPatch.WallLayerMask);
             else
-                _cam.cullingMask |= (1 << TransparentWallsPatch.WallLayerMask);
+                builder |= (1 << TransparentWallsPatch.WallLayerMask);
 
-            if (Config.avatar > 1) // avatar only
+            if (Config.avatar > 1 && (Config.thirdPerson || Config.use360Camera)) // avatar only
             {
-                _cam.cullingMask = 1 << OnlyInThirdPerson;
-                _cam.cullingMask |= 1 << AlwaysVisible;
+                builder = 1 << OnlyInThirdPerson;
+                builder |= 1 << AlwaysVisible;
             }
             else if (Config.avatar > 0) // show avatar 
             {
                 if (Config.thirdPerson || Config.use360Camera)
                 {
-                    _cam.cullingMask &= ~(1 << OnlyInFirstPerson);
-                    _cam.cullingMask |= 1 << OnlyInThirdPerson;
+                    builder |= 1 << OnlyInThirdPerson;
+                    builder &= ~(1 << OnlyInFirstPerson);
                 }
                 else
                 {
-                    _cam.cullingMask &= ~(1 << OnlyInThirdPerson);
-                    _cam.cullingMask |= 1 << OnlyInFirstPerson;
+                    builder |= 1 << OnlyInFirstPerson;
+                    builder &= ~(1 << OnlyInThirdPerson);
                 }
-                _cam.cullingMask |= 1 << AlwaysVisible;
+                builder |= 1 << AlwaysVisible;
             }
             else // hide avatar
             {
-                _cam.cullingMask &= ~(1 << OnlyInThirdPerson);
-                _cam.cullingMask &= ~(1 << OnlyInFirstPerson);
-                _cam.cullingMask &= ~(1 << AlwaysVisible);
+                builder &= ~(1 << OnlyInThirdPerson);
+                builder &= ~(1 << OnlyInFirstPerson);
+                builder &= ~(1 << AlwaysVisible);
             }
-            if (Config.debri!="link")
+
+            if (Config.debri != "link")
             {
-                if (Config.debri=="show")
-                    _cam.cullingMask |= (1 << NotesDebriLayer);
+                if (Config.debri == "show")
+                    builder |= (1 << NotesDebriLayer);
                 else
-                    _cam.cullingMask &= ~(1 << NotesDebriLayer);
+                    builder &= ~(1 << NotesDebriLayer);
             }
-            if (Config.displayUI)
-                _cam.cullingMask &= ~(1 << UILayer);
+            if (Config.HideUI)
+                builder &= ~(1 << UILayer);
             else
-                _cam.cullingMask |= (1 << UILayer);
+                builder |= (1 << UILayer);
+
+            _cam.cullingMask = builder;
         }
 
         public bool IsWithinRenderArea(Vector2 mousePos, Config c)
@@ -825,7 +859,7 @@ namespace CameraPlus
                 }
             }
 
-            if (holdingLeftClick && !Config.fitToCanvas)
+            if (holdingLeftClick && !Config.fitToCanvas && !Config.LockScreen)
             {
                 if (!_mouseHeld)
                 {
@@ -901,7 +935,41 @@ namespace CameraPlus
                 anyInstanceBusy = false;
             }
         }
+        void OnGUI()
+        {
+            if (MultiplayerSession.connectedPlayers != null && Config.DisplayMultiPlayerNameInfo)
+            {
+                foreach (IConnectedPlayer connectedPlayer in MultiplayerSession.connectedPlayers)
+                {
+                    if (Config.MultiPlayerNumber - 1 == connectedPlayer.sortIndex)
+                    {
+                        int size = 0;
+                        GUI.skin.label.fontSize = Config.screenWidth / 8;
+                        size = GUI.skin.label.fontSize + 15;
+                        GUI.Label(new Rect(Config.screenPosX, Config.screenPosY, Config.screenWidth, GUI.skin.label.fontSize + 15), connectedPlayer.userName);
 
+                        if (SceneManager.GetActiveScene().name == "GameCore" && MultiplayerSession.ConnectedMultiplay)
+                        {
+                            if (ScoreProvider == null)
+                                ScoreProvider = Resources.FindObjectsOfTypeAll<MultiplayerScoreProvider>().FirstOrDefault();
+
+                            foreach (MultiplayerScoreProvider.RankedPlayer rankedPlayer in ScoreProvider.rankedPlayers)
+                            {
+                                if (rankedPlayer.userId == connectedPlayer.userId)
+                                {
+                                    GUI.skin.label.fontSize = 30;
+                                    GUI.Label(new Rect(Config.screenPosX, Config.screenPosY + size + 45, Config.screenWidth, 40), String.Format("{0:#,0}", rankedPlayer.score));
+                                    GUI.Label(new Rect(Config.screenPosX, Config.screenPosY + size + 5, Config.screenWidth, 40), "Rank " + ScoreProvider.GetPositionOfPlayer(connectedPlayer.userId).ToString());
+                                    break;
+                                }
+                            }
+                            break;
+                        }
+                    }
+                }
+
+            }
+        }
         void DisplayContextMenu()
         {
             if (_contextMenu == null)

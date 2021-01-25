@@ -192,6 +192,10 @@ namespace CameraPlus
                 scriptList[i] = Path.GetFileName(spath[i]);
             return scriptList;
         }
+        public static string CurrentMovementScript(string scriptPath)
+        {
+            return Path.GetFileName(scriptPath);
+        }
 
         public static IEnumerator Spawn38Cameras()
         {
